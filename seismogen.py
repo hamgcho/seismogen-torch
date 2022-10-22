@@ -1,3 +1,4 @@
+from email.generator import Generator
 import seisbench.data as sbd
 import seisbench
 import numpy as np
@@ -18,10 +19,6 @@ class GenBlock(torch.nn.Module):
         self.z_relu = torch.nn.ReLU()
         self.z_BN = torch.nn.BatchNorm1d(1)
         
-        self.y_linear = torch.nn.Linear(in_features=1, out_features=400)
-        self.y_tconv = torch.nn.ConvTranspose1d(in_channels=1, out_channels=16, kernel_size=128, stride=4)
-        self.y_relu = torch.nn.ReLU()
-        self.y_BN = torch.nn.BatchNorm1d(1)
         
         self.conv1 = torch.nn.Conv1d(in_channels=32, out_channels=32, kernel_size=128, stride=1)
         self.upsample1 = torch.nn.Upsample(size=length)
@@ -35,20 +32,20 @@ class GenBlock(torch.nn.Module):
         
         self.conv3 = torch.nn.Conv1d(in_channels=32, out_channels=1, kernel_size=128, stride=1)
         self.upsample3 = torch.nn.Upsample(size=length)
-            
-    def forward(self, y:int):
+        
+        
+        
+    def forward(self, processed_y:torch.Tensor):
         '''
             input y corresponds to the concept of label, which tells whether it is a positive/negative sample.
+            
         '''
         z = np.random.normal(size=(1, 400))
         z = torch.Tensor([z])
         z = self.z_tconv(z)
         z = self.z_upsample(z)
         
-        y = torch.Tensor([[[float(y)]]])
-        
-        y = self.y_linear(y)
-        y = torch.y
+        y = processed_y
         x = torch.cat([y, z], dim=1)
         
         x = self.conv1(x)
@@ -66,15 +63,35 @@ class GenBlock(torch.nn.Module):
 
         return x
 class GenNetwork(torch.nn.Module):
-    def __init__(self, ):
+    def __init__(self, length:int=1600):
         super(GenNetwork, self).__init__()
         
+        self.y_linear = torch.nn.Linear(in_features=1, out_features=400)
+        self.y_tconv = torch.nn.ConvTranspose1d(in_channels=1, out_channels=16, kernel_size=128, stride=4)
+        self.y_upsample = torch.nn.Upsample(size=length)
+        self.y_relu = torch.nn.ReLU()
+        self.y_BN = torch.nn.BatchNorm1d(16)
         
-    def forward(self, z):
-        pass
+        self.gblocks = [GenBlock() for _ in range(3)]
+        
+        
+        
+    def forward(self, y:int):
+        y = torch.tensor([[[float(y)]]])
+        y = self.y_linear(y)
+        y = self.y_tconv(y)
+        y = self.y_upsample(y)
+        y = self.y_relu(y)
+        y = self.y_BN(y)
+        
+        res = []
+        for gblock in self.gblocks:
+            res.append(gblock(y))
+        res = torch.cat(res, dim=1)
+        return res
 
 
 if __name__ == '__main__':
-    gblock = GenBlock()
-    x_tilde = gblock(1)
-    print(x_tilde.shape)
+    G = GenNetwork()
+    synthetic = G(0)
+    print(synthetic.shape)
