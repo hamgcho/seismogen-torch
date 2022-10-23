@@ -90,6 +90,92 @@ class GenNetwork(torch.nn.Module):
         res = torch.cat(res, dim=1)
         return res
 
+def adaptive_cutoff():
+    '''
+        given data, infer the cutoff frequency.
+    '''
+    pass
+
+
+class Discriminator(torch.nn.Module):
+    def __init__(self,):
+        super(Discriminator, self).__init__()
+        
+        # feature extraction
+        
+        self.x_low_block = torch.nn.Sequential(
+            torch.nn.Conv1D(in_channels=1, out_channels=32, kernel_size=16, stride=2),
+            torch.nn.LeakyReLU(),
+            torch.nn.Conv1D(in_channels=32, out_channels=32, kernel_size=16, stride=1),
+            torch.nn.LeakyReLU(),
+            torch.nn.Upsample(size=800)
+        )
+        
+        self.x_high_block = torch.nn.Sequential(
+            torch.nn.Conv1D(in_channels=1, out_channels=32, kernel_size=16, stride=2),
+            torch.nn.LeakyReLU(),
+            torch.nn.Conv1D(in_channels=32, out_channels=32, kernel_size=16, stride=1),
+            torch.nn.LeakyReLU(),
+            torch.nn.Upsample(size=800)
+        )
+        
+        self.y_block = torch.nn.Sequential(
+            torch.nn.Linear(in_features=1, out_features=800),
+            torch.nn.Conv1D(in_channels=1, out_channels=32, kernel_size=16, stride=1),
+            torch.nn.LeakyReLU(),
+            torch.nn.Upsample(size=800)
+        )
+        
+        # sample critic
+         
+        self.sample_critic = torch.nn.Sequential(
+            torch.nn.Conv1D(in_channels=96, out_channels=48, kernel_size=16, stride=3),
+            torch.nn.LeakyReLU(),
+            torch.nn.Conv1D(in_channels=48, out_channels=32, kernel_size=16, stride=3),
+            torch.nn.LeakyReLU(),
+            torch.nn.Conv1D(in_channels=32, out_channels=24, kernel_size=16, stride=3),
+            torch.nn.LeakyReLU(),
+        )
+    
+    def decomposer(self, x:np.array, T:float=3.75)->tuple:
+        '''
+            with fft, get a spectrogram
+            with the freq-component information and cut-off frequency T, decompose it in frequency domain
+            And then with inverse fourire transformation, recover the x_low, x_high
+
+            input : 
+                np.array signal x
+                float T : hyperparameter, cut-off frequency
+                TODO : implement adaptive-filter inferrer and use the inference by it as the input in here.
+            output : 
+                (x_low, x_high) output each as torch.Tensor-formatted
+        '''
+    
+    def forward(self, x:np.array, y:int):
+        '''
+            1. Feature extraction
+                - signal decomposition is included
+                - how? fft
+            2. Sample critic
+            
+        '''
+        
+        # stage 1 : Feature extraction
+        
+        x_low, x_high = self.decomposer(x)
+        
+        x_low = self.x_low_block(x_low)
+        x_low = self.x_high_block(x_high)
+        y = torch.Tensor([[[float(y)]]])
+        y = self.y_block(y)
+        
+        feature = torch.cat([x_low, x_high, y], dim=1)
+        
+        # stage 2 : Sample Critic 
+        
+        res = self.sample_critic(feature)
+        res = torch.mean(res)
+        return res
 
 if __name__ == '__main__':
     G = GenNetwork()
